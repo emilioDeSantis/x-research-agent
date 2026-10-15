@@ -29,9 +29,10 @@ DEPTHS = {
     "max": dict(lead_effort="xhigh", worker_effort="high", lead_turns=45, worker_turns=24, max_workers=10, budget=30.0),
 }
 
+# max_uses caps each request so a single model turn can't run up an unbounded bill between budget checks.
 SERVER_TOOLS = [
-    {"type": "web_search_20260209", "name": "web_search"},
-    {"type": "web_fetch_20260209", "name": "web_fetch"},
+    {"type": "web_search_20260209", "name": "web_search", "max_uses": 6},
+    {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 5},
 ]
 
 
@@ -310,8 +311,15 @@ async def _agent_loop(run: Run, agent: str, system: str, messages: list, tools: 
         )
         if final_turn:
             kwargs["tool_choice"] = {"type": "none"}
-        async with _claude().beta.messages.stream(**kwargs) as stream:
-            msg = await stream.get_final_message()
+        try:
+            async with _claude().beta.messages.stream(**kwargs) as stream:
+                msg = await stream.get_final_message()
+        except anthropic.BadRequestError:
+            if not final_turn:
+                raise
+            # Wrap-up request rejected (e.g. mid-pause history shape); return what the agent has written so far.
+            return "\n\n".join(b.text for m in messages if m["role"] == "assistant"
+                                 for b in m["content"] if getattr(b, "type", None) == "text").strip()
         run.cost.add_claude(msg.usage)
         messages.append({"role": "assistant", "content": msg.content})
 
@@ -326,6 +334,9 @@ async def _agent_loop(run: Run, agent: str, system: str, messages: list, tools: 
         if msg.stop_reason == "refusal":
             raise RuntimeError("model declined this request")
         if msg.stop_reason == "pause_turn":
+            if run.cost.budget and run.cost.search_room() <= 0 and not final_turn:
+                final_turn = True
+                messages.append({"role": "user", "content": "You've used your research budget. Write your final answer now with what you have."})
             continue
 
         text = "".join(b.text for b in msg.content if b.type == "text").strip()

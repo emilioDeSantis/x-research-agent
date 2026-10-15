@@ -43,8 +43,8 @@ class Cost:
         return bool(self.budget) and self.usd >= self.budget
 
     def search_room(self) -> float:
-        """Budget left for new searches: keeps ~20% back for the agents' own reading and writing."""
-        return self.budget * 0.8 - self.usd - self.reserved
+        """Budget left for new searches: keeps ~30% back for the agents' own reading and writing."""
+        return self.budget * 0.7 - self.usd - self.reserved
 
     def budget_note(self) -> str:
         return f"[research spend so far: ${self.usd:.2f} of ${self.budget:.2f} budget]" if self.budget else ""
