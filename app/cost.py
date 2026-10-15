@@ -15,6 +15,8 @@ class Cost:
     grok_users: int = 0
     x_posts: int = 0
     x_users: int = 0
+    grok_usd: float = 0.0
+    budget: float = 0.0
     calls: dict = field(default_factory=dict)
 
     def add_claude(self, usage) -> None:
@@ -24,6 +26,23 @@ class Cost:
         stu = getattr(usage, "server_tool_use", None)
         if stu is not None:
             self.claude_web_searches += getattr(stu, "web_search_requests", 0) or 0
+
+    def add_grok(self, input_tokens: int, output_tokens: int, posts: int, users: int) -> None:
+        self.grok_in += input_tokens
+        self.grok_out += output_tokens
+        self.grok_posts += posts
+        self.grok_users += users
+        # xAI doubles token prices once a request's context reaches 200k tokens.
+        mult = 2 if input_tokens >= 200_000 else 1
+        self.grok_usd += (input_tokens * PRICE["grok_in"] + output_tokens * PRICE["grok_out"]) * mult \
+            + posts * PRICE["grok_post"] + users * PRICE["grok_user"]
+
+    @property
+    def over_budget(self) -> bool:
+        return bool(self.budget) and self.usd >= self.budget
+
+    def budget_note(self) -> str:
+        return f"[research spend so far: ${self.usd:.2f} of ${self.budget:.2f} budget]" if self.budget else ""
 
     def tick(self, name: str) -> None:
         self.calls[name] = self.calls.get(name, 0) + 1
@@ -36,10 +55,7 @@ class Cost:
             + self.claude_out * p["claude_out"]
             + self.claude_cache_read * p["claude_cache_read"]
             + self.claude_web_searches * p["claude_web_search"]
-            + self.grok_in * p["grok_in"]
-            + self.grok_out * p["grok_out"]
-            + self.grok_posts * p["grok_post"]
-            + self.grok_users * p["grok_user"]
+            + self.grok_usd
             + self.x_posts * p["x_post"]
             + self.x_users * p["x_user"]
         )
@@ -47,6 +63,7 @@ class Cost:
     def summary(self) -> dict:
         return {
             "usd": round(self.usd, 3),
+            "budget": self.budget,
             "claude_tokens": {"in": self.claude_in, "out": self.claude_out, "cache_read": self.claude_cache_read},
             "web_searches": self.claude_web_searches,
             "grok": {"posts": self.grok_posts, "users": self.grok_users, "in": self.grok_in, "out": self.grok_out},

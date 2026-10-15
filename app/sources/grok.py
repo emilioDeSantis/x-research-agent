@@ -2,11 +2,11 @@
 
 import httpx
 
-from ..config import GROK_MODEL, XAI_API_KEY
+from ..config import GROK_MAX_TURNS, GROK_MODEL, XAI_API_KEY
 from ..cost import Cost
 
 INSTRUCTIONS = """You are a search backend for a research agent, not a chat assistant.
-Search X thoroughly for the request below — use several keyword and semantic searches, look up the relevant accounts, and open threads that matter.
+Search X for the request below. Pick your searches carefully — you only get a couple of rounds — and favor precise queries over broad ones.
 
 Return what you found as raw material, not an essay:
 - For each relevant post: @handle (and who they are, if known), date, approximate engagement if visible, what it says (quote the key line verbatim), and its x.com URL.
@@ -43,6 +43,7 @@ async def grok_x_search(
         "instructions": INSTRUCTIONS,
         "input": query,
         "tools": [tool],
+        "max_turns": GROK_MAX_TURNS,
     }
     async with httpx.AsyncClient(timeout=300) as client:
         r = await client.post(
@@ -55,11 +56,9 @@ async def grok_x_search(
     data = r.json()
 
     usage = data.get("usage") or {}
-    cost.grok_in += usage.get("input_tokens", 0) or 0
-    cost.grok_out += usage.get("output_tokens", 0) or 0
     details = usage.get("server_side_tool_usage_details") or {}
-    cost.grok_posts += details.get("x_posts_fetched", 0) or 0
-    cost.grok_users += details.get("x_users_fetched", 0) or 0
+    cost.add_grok(usage.get("input_tokens", 0) or 0, usage.get("output_tokens", 0) or 0,
+                  details.get("x_posts_fetched", 0) or 0, details.get("x_users_fetched", 0) or 0)
 
     text_parts = []
     for item in data.get("output", []):

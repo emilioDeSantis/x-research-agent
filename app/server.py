@@ -15,6 +15,7 @@ db.mark_interrupted()
 class Ask(BaseModel):
     question: str
     depth: str = "deep"
+    budget: float | None = None
 
 
 @app.get("/")
@@ -31,7 +32,7 @@ def status():
 async def ask(body: Ask):
     if not body.question.strip():
         raise HTTPException(400, "empty question")
-    run = agent.start(body.question.strip(), body.depth)
+    run = agent.start(body.question.strip(), body.depth, body.budget)
     return {"id": run.id}
 
 

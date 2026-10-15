@@ -1,5 +1,8 @@
 """Official X API v2 (pay-per-use). Exact operator search, threads, user timelines."""
 
+import asyncio
+from datetime import datetime, timedelta, timezone
+
 import httpx
 
 from ..config import X_BEARER_TOKEN
@@ -13,7 +16,11 @@ USER_FIELDS = "username,name,description,public_metrics,verified"
 
 async def _get(path: str, params: dict) -> dict:
     async with httpx.AsyncClient(timeout=60) as client:
-        r = await client.get(BASE + path, params=params, headers={"Authorization": f"Bearer {X_BEARER_TOKEN}"})
+        for attempt in range(3):
+            r = await client.get(BASE + path, params=params, headers={"Authorization": f"Bearer {X_BEARER_TOKEN}"})
+            if r.status_code < 500:
+                break
+            await asyncio.sleep(2 * (attempt + 1))
     if r.status_code == 429:
         raise RuntimeError(f"X API rate limited; resets at {r.headers.get('x-rate-limit-reset')}")
     if r.status_code >= 400:
@@ -59,7 +66,19 @@ def _format(data: dict, cost: Cost, sort: str = "likes", min_likes: int = 0, lim
     return "\n\n".join(lines) + (f"\n\n(+{more} more not shown)" if more > 0 else "")
 
 
-async def search(cost: Cost, query: str, sort_order: str = "relevancy", max_results: int = 100,
+def _clamp_start(start_time: str) -> str | None:
+    """Recent search only reaches back 7 days; keep start_time just inside that window."""
+    earliest = datetime.now(timezone.utc) - timedelta(days=7) + timedelta(minutes=5)
+    try:
+        t = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return max(t, earliest).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+async def search(cost: Cost, query: str, sort_order: str = "relevancy", max_results: int = 30,
                  sort: str = "likes", min_likes: int = 0, start_time: str | None = None) -> str:
     q = query if "is:retweet" in query else f"{query} -is:retweet"
     params = {
@@ -70,8 +89,8 @@ async def search(cost: Cost, query: str, sort_order: str = "relevancy", max_resu
         "expansions": "author_id",
         "user.fields": USER_FIELDS,
     }
-    if start_time:
-        params["start_time"] = start_time
+    if start_time and (clamped := _clamp_start(start_time)):
+        params["start_time"] = clamped
     return _format(await _get("/tweets/search/recent", params), cost, sort=sort, min_likes=min_likes)
 
 
@@ -84,7 +103,7 @@ async def thread(cost: Cost, tweet_id: str) -> str:
     head = _format({"data": [root_t], "includes": root.get("includes")}, cost, sort="none")
     replies = await _get("/tweets/search/recent", {
         "query": f"conversation_id:{conv}",
-        "max_results": 100,
+        "max_results": 50,
         "tweet.fields": TWEET_FIELDS,
         "expansions": "author_id",
         "user.fields": USER_FIELDS,
@@ -92,7 +111,7 @@ async def thread(cost: Cost, tweet_id: str) -> str:
     return f"ROOT POST:\n{head}\n\nREPLIES / THREAD (top by likes, last 7 days only):\n" + _format(replies, cost, limit=30)
 
 
-async def user_posts(cost: Cost, username: str, max_results: int = 50, include_replies: bool = False) -> str:
+async def user_posts(cost: Cost, username: str, max_results: int = 25, include_replies: bool = False) -> str:
     u = await _get(f"/users/by/username/{username.lstrip('@')}", {"user.fields": USER_FIELDS})
     user = u.get("data")
     if not user:
@@ -103,8 +122,8 @@ async def user_posts(cost: Cost, username: str, max_results: int = 50, include_r
         "max_results": max(5, min(100, max_results)),
         "exclude": exclude,
         "tweet.fields": TWEET_FIELDS,
-        "expansions": "author_id",
-        "user.fields": USER_FIELDS,
     })
+    data["includes"] = {"users": [user]}  # we already have the author; don't pay to expand them on every post
+    cost.x_users -= 1  # _format counts includes.users, but this one was billed above
     bio = f"@{user['username']} — {user.get('name', '')}: {user.get('description', '')}\n\n"
     return bio + _format(data, cost, sort="recent", limit=max_results)

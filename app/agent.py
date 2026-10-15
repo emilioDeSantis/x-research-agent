@@ -24,9 +24,9 @@ def _claude() -> anthropic.AsyncAnthropic:
 
 DEPTHS = {
     # lead effort, worker effort, lead turn cap, worker turn cap, max workers
-    "quick": dict(lead_effort="medium", worker_effort="medium", lead_turns=14, worker_turns=0, max_workers=0),
-    "deep": dict(lead_effort="high", worker_effort="medium", lead_turns=30, worker_turns=18, max_workers=6),
-    "max": dict(lead_effort="xhigh", worker_effort="high", lead_turns=45, worker_turns=28, max_workers=10),
+    "quick": dict(lead_effort="medium", worker_effort="medium", lead_turns=14, worker_turns=0, max_workers=0, budget=1.5),
+    "deep": dict(lead_effort="high", worker_effort="medium", lead_turns=30, worker_turns=16, max_workers=6, budget=10.0),
+    "max": dict(lead_effort="xhigh", worker_effort="high", lead_turns=45, worker_turns=24, max_workers=10, budget=30.0),
 }
 
 SERVER_TOOLS = [
@@ -45,7 +45,7 @@ def _source_tools() -> list[dict]:
                 "accounts, and reads threads for you, then returns the relevant posts with handles, quotes, dates and "
                 "x.com URLs. Best for discovery: 'what are people saying about X', finding who matters on a topic, "
                 "catching things you don't know the keywords for. Phrase the query as a precise natural-language "
-                "request. Covers all of X's history. ~$0.10–0.50 per call depending on how much it reads."
+                "request. Covers all of X's history. The most expensive tool (~$0.50–1.50 per call; busy topics cost more), so make each query count and don't repeat near-identical ones."
             ),
             "input_schema": {
                 "type": "object",
@@ -69,7 +69,7 @@ def _source_tools() -> list[dict]:
                     "engagement numbers, sorted client-side. Supports X operators: implicit AND, OR, -negation, "
                     "(grouping), \"exact phrase\", from:user, to:user, url:domain.com, has:links, has:media, is:reply, "
                     "is:quote, lang:en, conversation_id:ID. Retweets are excluded automatically. min_faves is NOT "
-                    "supported — use min_likes instead. Costs $0.005 per post returned (~$0.50 per full page)."
+                    "supported — use min_likes instead. Costs ~$0.015 per post returned (post + author), so keep max_results modest (default 30)."
                 ),
                 "input_schema": {
                     "type": "object",
@@ -78,7 +78,7 @@ def _source_tools() -> list[dict]:
                         "sort_order": {"type": "string", "enum": ["relevancy", "recency"], "description": "What X returns first. Default relevancy."},
                         "sort": {"type": "string", "enum": ["likes", "recent"], "description": "How results are ordered for you. Default likes."},
                         "min_likes": {"type": "integer", "description": "Drop posts below this many likes."},
-                        "max_results": {"type": "integer", "description": "10-100, default 100."},
+                        "max_results": {"type": "integer", "description": "10-100, default 30."},
                         "start_time": {"type": "string", "description": "ISO 8601, e.g. 2026-10-14T00:00:00Z."},
                     },
                     "required": ["query"],
@@ -100,7 +100,7 @@ def _source_tools() -> list[dict]:
                     "type": "object",
                     "properties": {
                         "username": {"type": "string"},
-                        "max_results": {"type": "integer", "description": "5-100, default 40."},
+                        "max_results": {"type": "integer", "description": "5-100, default 25."},
                         "include_replies": {"type": "boolean"},
                     },
                     "required": ["username"],
@@ -138,6 +138,10 @@ DELEGATE_TOOL = {
 }
 
 
+# Rough worst-case cost of one call, used to refuse calls that would blow the budget.
+EST_COST = {"x_search_grok": 1.2, "x_search": 0.5, "x_thread": 0.6, "x_user_posts": 0.3}
+
+
 def _today() -> str:
     return datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
 
@@ -161,7 +165,7 @@ X is where things surface first: researchers, founders, engineers and insiders p
 
 Your job is to find everything that matters on the question — including things the person wouldn't have known to ask about — and separate signal from noise. Good research here tends to snowball: the people who keep showing up are worth reading directly, threads with real engagement often hold the best detail, and links that many posts point to are usually the primary source. Engagement is a signal but not the truth; a small account that built the thing beats a big account summarizing it. Watch dates closely — "latest" means latest as of today.
 
-{depth_note}
+{depth_note} You have a research budget of about ${budget:.0f} for this question (workers' spending counts toward it); every tool result shows the running total. Spend it where it buys new information.
 
 When you're done researching, write the final briefing as your answer, in Markdown. It is the whole deliverable — the person reads only this. Make it something they can read in a few minutes and come away genuinely current:
 - Open with a short TL;DR of what matters most right now.
@@ -181,7 +185,7 @@ DEPTH_NOTES = {
 
 WORKER_SYSTEM = """You are a research worker on a team keeping someone fully up to date on the state of the world. Today is {today}. The lead researcher gave you one angle of a larger question; dig into it thoroughly and report back. {sources}
 
-X is where things surface first; the web is where you confirm and find primary sources. Follow what you find: people who keep coming up, threads with real discussion, links many posts point to.
+X is where things surface first; the web is where you confirm and find primary sources. Follow what you find: people who keep coming up, threads with real discussion, links many posts point to. Searches cost real money and the team shares one budget (each tool result shows the running total), so make each search count, don't repeat near-identical queries, and stop once you've covered your angle.
 
 Your final answer is notes for the lead, not a polished essay. Make them dense and complete:
 - Findings, each with its source URL (x.com post or web page), date, who said it (and who they are), and engagement when known. Quote key lines verbatim.
@@ -192,12 +196,12 @@ Your final answer is notes for the lead, not a polished essay. Make them dense a
 
 
 class Run:
-    def __init__(self, question: str, depth: str):
+    def __init__(self, question: str, depth: str, budget: float | None = None):
         self.id = uuid.uuid4().hex[:12]
         self.question = question
         self.depth = depth if depth in DEPTHS else "deep"
         self.events: list[dict] = []
-        self.cost = Cost()
+        self.cost = Cost(budget=budget or DEPTHS[self.depth]["budget"])
         self.status = "running"
         self.report: str | None = None
         self._cond = asyncio.Condition()
@@ -223,6 +227,12 @@ def _short(value, n: int = 400) -> str:
 
 async def _exec_tool(run: Run, agent: str, block, worker_turns: int, worker_effort: str, max_workers: int) -> dict:
     name, args = block.name, block.input if isinstance(block.input, dict) else {}
+    left = run.cost.budget - run.cost.usd
+    if run.cost.budget and name != "delegate" and left < EST_COST.get(name, 0.05):
+        cheaper = [n for n, c in EST_COST.items() if c <= left]
+        hint = f" Cheaper options that still fit: {', '.join(cheaper)}, web_search." if cheaper and left > 0.05 else " No more searching — write up what you have."
+        return {"type": "tool_result", "tool_use_id": block.id, "is_error": True,
+                "content": f"Not enough budget left for {name} (${left:.2f} remaining of ${run.cost.budget:.2f}).{hint}"}
     run.cost.tick(name)
     started = time.time()
     await run.emit("tool", agent=agent, name=name, input=args)
@@ -244,12 +254,14 @@ async def _exec_tool(run: Run, agent: str, block, worker_turns: int, worker_effo
         out, is_error = f"Error: {e}", True
     await run.emit("tool_done", agent=agent, name=name, ms=int((time.time() - started) * 1000),
                    preview=_short(out, 600), error=is_error, cost=run.cost.summary())
-    return {"type": "tool_result", "tool_use_id": block.id, "content": out, "is_error": is_error}
+    return {"type": "tool_result", "tool_use_id": block.id, "content": f"{out}\n\n{run.cost.budget_note()}", "is_error": is_error}
 
 
 async def _delegate(run: Run, tasks: list[dict], worker_turns: int, worker_effort: str, max_workers: int) -> str:
     if not tasks:
         return "No tasks given."
+    if run.cost.over_budget:
+        return "Research budget used up — no workers sent. Write up what you have."
     tasks = tasks[: max(1, max_workers)]
     sem = asyncio.Semaphore(6)
 
@@ -323,7 +335,7 @@ async def _agent_loop(run: Run, agent: str, system: str, messages: list, tools: 
             _exec_tool(run, agent, b, worker_turns, worker_effort, max_workers) for b in tool_uses
         ))
         content: list = list(results)
-        if turn >= max_turns - 1:
+        if turn >= max_turns - 1 or run.cost.over_budget:
             final_turn = True
             content.append({"type": "text", "text": "You've used your research budget. Write your final answer now with what you have."})
         messages.append({"role": "user", "content": content})
@@ -332,7 +344,7 @@ async def _agent_loop(run: Run, agent: str, system: str, messages: list, tools: 
 async def execute(run: Run) -> None:
     cfg = DEPTHS[run.depth]
     tools = _source_tools() + SERVER_TOOLS + ([DELEGATE_TOOL] if cfg["max_workers"] else [])
-    system = LEAD_SYSTEM.format(today=_today(), sources=_sources_note(), depth_note=DEPTH_NOTES[run.depth])
+    system = LEAD_SYSTEM.format(today=_today(), sources=_sources_note(), depth_note=DEPTH_NOTES[run.depth], budget=run.cost.budget)
     await run.emit("start", question=run.question, depth=run.depth)
     try:
         report = await _agent_loop(
@@ -352,8 +364,8 @@ async def execute(run: Run) -> None:
         await run.emit("end", status=run.status)
 
 
-def start(question: str, depth: str) -> Run:
-    run = Run(question, depth)
+def start(question: str, depth: str, budget: float | None = None) -> Run:
+    run = Run(question, depth, budget)
     RUNS[run.id] = run
     asyncio.create_task(execute(run))
     return run

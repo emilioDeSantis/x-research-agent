@@ -34,7 +34,9 @@ form textarea { width: 100%; min-height: 96px; padding: 14px; border: 1px solid 
 .seg label { padding: 6px 12px; cursor: pointer; font-size: 13px; }
 .seg input { display: none; }
 .seg input:checked + span { color: var(--accent); font-weight: 600; }
-button.go { margin-left: auto; padding: 8px 18px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 600; cursor: pointer; }
+.budget { font-size: 13px; color: var(--muted); margin-left: auto; }
+.budget input { width: 64px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; }
+button.go { padding: 8px 18px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 600; cursor: pointer; }
 button.go:disabled { opacity: .5; cursor: default; }
 .q { font-size: 20px; font-weight: 650; margin: 0 0 6px; }
 .meta { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
@@ -102,10 +104,11 @@ function newQuestion() {
         <div class="seg">
           ${["quick", "deep", "max"].map((d) => `<label><input type="radio" name="depth" value="${d}" ${d === "deep" ? "checked" : ""}><span>${d}</span></label>`).join("")}
         </div>
+        <label class="budget">Budget $<input id="budget" type="number" min="0.5" step="0.5" placeholder="auto"></label>
         <button class="go" type="submit">Research</button>
       </div>
     </form>
-    <p class="empty">Quick ≈ a minute or two. Deep sends parallel workers across X and the web. Max is exhaustive.</p>`;
+    <p class="empty">Quick ≈ a couple of minutes, ≤$1.50. Deep sends parallel workers across X and the web, ≤$10. Max is exhaustive, ≤$30.</p>`;
   $("#question").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("#f").requestSubmit(); });
   $("#f").onsubmit = async (e) => {
     e.preventDefault();
@@ -113,7 +116,7 @@ function newQuestion() {
     if (!question) return;
     e.submitter && (e.submitter.disabled = true);
     const depth = document.querySelector("input[name=depth]:checked").value;
-    const { id } = await (await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, depth }) })).json();
+    const { id } = await (await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, depth, budget: parseFloat($("#budget").value) || null }) })).json();
     location.hash = id;
   };
   loadHistory();
@@ -144,7 +147,7 @@ function renderEvent(ev) {
 
 function costLine(c) {
   if (!c) return "";
-  const parts = [`$${c.usd.toFixed(2)}`];
+  const parts = [`$${c.usd.toFixed(2)}` + (c.budget ? ` of $${c.budget.toFixed(0)} budget` : "")];
   if (c.grok.posts) parts.push(`${c.grok.posts} posts via Grok`);
   if (c.x_api.posts) parts.push(`${c.x_api.posts} posts via X API`);
   if (c.web_searches) parts.push(`${c.web_searches} web searches`);

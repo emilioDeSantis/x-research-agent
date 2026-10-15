@@ -12,6 +12,7 @@ X_BEARER_TOKEN = os.getenv("X_BEARER_TOKEN", "")
 
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-5-5")
 GROK_MODEL = os.getenv("GROK_MODEL", "grok-4.7")
+GROK_MAX_TURNS = int(os.getenv("GROK_MAX_TURNS", "1"))
 
 DB_PATH = ROOT / "data" / "research.db"
 
