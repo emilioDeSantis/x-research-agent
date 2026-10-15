@@ -17,6 +17,7 @@ class Cost:
     x_users: int = 0
     grok_usd: float = 0.0
     budget: float = 0.0
+    reserved: float = 0.0  # estimated cost of tool calls currently in flight
     calls: dict = field(default_factory=dict)
 
     def add_claude(self, usage) -> None:
@@ -40,6 +41,10 @@ class Cost:
     @property
     def over_budget(self) -> bool:
         return bool(self.budget) and self.usd >= self.budget
+
+    def search_room(self) -> float:
+        """Budget left for new searches: keeps ~20% back for the agents' own reading and writing."""
+        return self.budget * 0.8 - self.usd - self.reserved
 
     def budget_note(self) -> str:
         return f"[research spend so far: ${self.usd:.2f} of ${self.budget:.2f} budget]" if self.budget else ""

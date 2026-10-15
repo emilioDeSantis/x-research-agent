@@ -227,13 +227,15 @@ def _short(value, n: int = 400) -> str:
 
 async def _exec_tool(run: Run, agent: str, block, worker_turns: int, worker_effort: str, max_workers: int) -> dict:
     name, args = block.name, block.input if isinstance(block.input, dict) else {}
-    left = run.cost.budget - run.cost.usd
-    if run.cost.budget and name != "delegate" and left < EST_COST.get(name, 0.05):
+    left = run.cost.search_room()
+    est = EST_COST.get(name, 0.0)
+    if run.cost.budget and name != "delegate" and left < max(est, 0.02):
         cheaper = [n for n, c in EST_COST.items() if c <= left]
         hint = f" Cheaper options that still fit: {', '.join(cheaper)}, web_search." if cheaper and left > 0.05 else " No more searching — write up what you have."
         return {"type": "tool_result", "tool_use_id": block.id, "is_error": True,
-                "content": f"Not enough budget left for {name} (${left:.2f} remaining of ${run.cost.budget:.2f}).{hint}"}
+                "content": f"Not enough search budget left for {name} (${max(left, 0):.2f} available; ${run.cost.usd:.2f} of ${run.cost.budget:.2f} spent).{hint}"}
     run.cost.tick(name)
+    run.cost.reserved += est
     started = time.time()
     await run.emit("tool", agent=agent, name=name, input=args)
     try:
@@ -252,6 +254,8 @@ async def _exec_tool(run: Run, agent: str, block, worker_turns: int, worker_effo
         is_error = False
     except Exception as e:  # report tool failures back to the model instead of crashing the run
         out, is_error = f"Error: {e}", True
+    finally:
+        run.cost.reserved -= est
     await run.emit("tool_done", agent=agent, name=name, ms=int((time.time() - started) * 1000),
                    preview=_short(out, 600), error=is_error, cost=run.cost.summary())
     return {"type": "tool_result", "tool_use_id": block.id, "content": f"{out}\n\n{run.cost.budget_note()}", "is_error": is_error}
@@ -260,7 +264,7 @@ async def _exec_tool(run: Run, agent: str, block, worker_turns: int, worker_effo
 async def _delegate(run: Run, tasks: list[dict], worker_turns: int, worker_effort: str, max_workers: int) -> str:
     if not tasks:
         return "No tasks given."
-    if run.cost.over_budget:
+    if run.cost.budget and run.cost.search_room() <= 0:
         return "Research budget used up — no workers sent. Write up what you have."
     tasks = tasks[: max(1, max_workers)]
     sem = asyncio.Semaphore(6)
@@ -335,7 +339,7 @@ async def _agent_loop(run: Run, agent: str, system: str, messages: list, tools: 
             _exec_tool(run, agent, b, worker_turns, worker_effort, max_workers) for b in tool_uses
         ))
         content: list = list(results)
-        if turn >= max_turns - 1 or run.cost.over_budget:
+        if turn >= max_turns - 1 or (run.cost.budget and run.cost.search_room() <= 0):
             final_turn = True
             content.append({"type": "text", "text": "You've used your research budget. Write your final answer now with what you have."})
         messages.append({"role": "user", "content": content})
