@@ -1,0 +1,110 @@
+<title>{{TITLE}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a field briefing — one reading column with a contents rail beside it on wide screens. */
+:root {
+  --paper: #f6f7f5;
+  --ink: #161a1d;
+  --muted: #5d666c;
+  --rule: #d8ddda;
+  --accent: #0d5ea8;
+  --accent-wash: #e7eef6;
+  --code-bg: #eceeeb;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1316; --ink: #e5e9eb; --muted: #97a1a7; --rule: #252c31;
+    --accent: #7fb5e9; --accent-wash: #15212c; --code-bg: #1a2024; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1316; --ink: #e5e9eb; --muted: #97a1a7; --rule: #252c31;
+  --accent: #7fb5e9; --accent-wash: #15212c; --code-bg: #1a2024; color-scheme: dark;
+}
+
+body { background: var(--paper); color: var(--ink); font: 17px/1.62 var(--body); }
+.page { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 48px 96px;
+        display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 56px; }
+
+header { grid-column: 1 / -1; display: grid; gap: 14px; padding-bottom: 28px; border-bottom: 1px solid var(--rule); }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+           display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.eyebrow b { color: var(--accent); font-weight: 500; }
+h1 { font: 800 clamp(30px, 5vw, 50px)/1.05 var(--display); font-stretch: 82%; letter-spacing: -.01em;
+     margin: 0; max-width: 22ch; text-wrap: balance; }
+.question { max-width: 68ch; color: var(--muted); }
+.question summary { cursor: pointer; font: 500 11px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; width: fit-content; }
+.question summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.question p { margin: 10px 0 0; font-style: italic; font-size: 15.5px; }
+
+nav { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; }
+nav p { font: 500 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+nav ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: s; }
+nav a { display: block; padding: 5px 0 5px 12px; border-left: 2px solid var(--rule); color: var(--muted);
+        text-decoration: none; font: 500 13.5px/1.35 var(--display); }
+nav a:hover, nav a:focus-visible { color: var(--ink); border-left-color: var(--accent); outline: none; }
+
+article { min-width: 0; max-width: 70ch; }
+section { padding-block: 8px 20px; }
+section + section { border-top: 1px solid var(--rule); }
+h2 { font: 750 25px/1.2 var(--display); font-stretch: 88%; margin: 28px 0 14px; text-wrap: balance; scroll-margin-top: 24px; }
+h3 { font: 700 18px/1.3 var(--display); margin: 26px 0 8px; }
+p { margin: 0 0 14px; }
+ul, ol { margin: 0 0 16px; padding-left: 22px; }
+li { margin: 5px 0; }
+li > ul, li > ol { margin: 4px 0 6px; }
+strong { font-weight: 600; }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+a.x { font-family: var(--mono); font-size: .86em; }
+code { font: .86em var(--mono); background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+em { font-style: italic; }
+
+.tldr { background: var(--accent-wash); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+        border-radius: 10px; padding: 4px 26px 10px; margin-top: 8px; }
+.tldr h2 { font-size: 13px; font-family: var(--mono); font-weight: 500; letter-spacing: .1em; text-transform: uppercase;
+           color: var(--accent); margin: 20px 0 10px; }
+.tldr + section { border-top: 0; }
+.tldr li { margin: 10px 0; }
+
+.table-wrap { overflow-x: auto; margin: 6px 0 18px; border: 1px solid var(--rule); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font: 14px/1.4 var(--display); font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font: 500 11px/1.2 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--code-bg); }
+tr:last-child td { border-bottom: 0; }
+
+footer { grid-column: 2; font: 12.5px/1.5 var(--mono); color: var(--muted); border-top: 1px solid var(--rule); padding-top: 18px; max-width: 70ch; }
+
+@media (max-width: 860px) {
+  .page { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-block: 28px 64px; padding-inline: 16px; }
+  nav { position: static; }
+  nav ol { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  footer { grid-column: 1; }
+  .tldr { padding: 2px 16px 8px; }
+  body { font-size: 16px; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow"><b>Research briefing</b><span>{{DATE}}</span><span>{{N_SOURCES}} sources cited</span><span>{{N_X}} from X</span></div>
+    <h1>{{HEADING}}</h1>
+    <details class="question"><summary>The question asked</summary><p>{{QUESTION}}</p></details>
+  </header>
+  <nav aria-label="Contents">
+    <p>Contents</p>
+    <ol>
+{{TOC}}
+    </ol>
+  </nav>
+  <article>
+{{BODY}}
+  </article>
+  <footer>Compiled by an AI research agent from posts on X and the open web on {{DATE}}. Claims are linked to their sources; check anything important before relying on it.</footer>
+</div>
