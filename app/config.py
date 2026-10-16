@@ -16,6 +16,12 @@ GROK_MAX_TURNS = int(os.getenv("GROK_MAX_TURNS", "1"))
 
 DB_PATH = ROOT / "data" / "research.db"
 
+# Shared GitHub repo: finished deep research is copied into its deep-research/ folder and noted in chat.md.
+SHARED_REPO_DIR = os.getenv("SHARED_REPO_DIR", "")
+SHARED_REPO_ME = os.getenv("SHARED_REPO_ME", "Emilio")
+SHARED_REPO_THEM = os.getenv("SHARED_REPO_THEM", "Zeke")
+SHARED_REPO_DEPTHS = {d.strip() for d in os.getenv("SHARED_REPO_DEPTHS", "deep,max").split(",") if d.strip()}
+
 # Prices (USD) used for the per-report cost estimate.
 PRICE = {
     "claude_in": 4.00 / 1e6,

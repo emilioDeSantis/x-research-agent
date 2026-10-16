@@ -139,6 +139,8 @@ function renderEvent(ev) {
       return `<div class="ev">${who}started: ${esc(ev.brief.slice(0, 240))}</div>`;
     case "worker_done":
       return `<div class="ev">${who}finished (${ev.notes.length.toLocaleString()} chars of notes)</div>`;
+    case "shared":
+      return `<div class="ev">Saved to the shared GitHub repo: ${esc(ev.path)}</div>`;
     case "error":
       return `<div class="ev err">Error: ${esc(ev.message)}</div>`;
     default:

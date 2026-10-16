@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 import anthropic
 
-from . import db
+from . import db, publish
 from .config import CLAUDE_MODEL, has_x_api, has_xai
 from .cost import Cost
 from .sources import grok, xapi
@@ -375,6 +375,12 @@ async def execute(run: Run) -> None:
         run.report = report
         run.status = "done"
         await run.emit("report", markdown=report, cost=run.cost.summary())
+        if report and publish.enabled_for(run.depth):
+            try:
+                rel = await asyncio.to_thread(publish.publish, run.question, report, run.depth, run.cost.usd)
+                await run.emit("shared", path=rel)
+            except Exception as e:
+                await run.emit("error", message=f"Report saved here, but sharing to the GitHub repo failed: {e}")
     except asyncio.CancelledError:
         run.status = "cancelled"
     except Exception as e:
