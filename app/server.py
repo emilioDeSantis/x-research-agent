@@ -2,10 +2,10 @@ import asyncio
 import json
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import agent, db
+from . import agent, db, export
 from .config import ANTHROPIC_API_KEY, ROOT, has_x_api, has_xai
 
 app = FastAPI(title="X Research Agent")
@@ -59,6 +59,16 @@ def get_run(run_id: str):
     if not stored:
         raise HTTPException(404)
     return stored
+
+
+@app.get("/runs/{run_id}/share", response_class=HTMLResponse)
+def share(run_id: str):
+    run = db.get_run(run_id)
+    if not run or not run.get("report"):
+        raise HTTPException(404, "no finished report for that run")
+    page = export.render(run)
+    # The template is written as an artifact body; wrap it so it also opens as a normal page.
+    return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body style=\"margin:0\">" + page + "</body></html>"
 
 
 @app.get("/api/runs/{run_id}/stream")

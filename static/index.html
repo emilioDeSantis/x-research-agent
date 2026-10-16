@@ -56,6 +56,7 @@ details.log summary { padding: 10px 14px; cursor: pointer; font-size: 13px; colo
 .report blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--muted); }
 .report code { background: var(--soft); padding: 1px 4px; border-radius: 4px; }
 .empty { color: var(--muted); margin-top: 40px; }
+.share { margin: 0 0 10px; font-size: 13px; } .share a { color: var(--accent); }
 @media (max-width: 760px) {
   .app { grid-template-columns: 1fr; }
   aside { position: static; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
@@ -154,6 +155,10 @@ function costLine(c) {
   return parts.join(" · ");
 }
 
+function showReport(md) {
+  $("#report").innerHTML = `<p class="share"><a href="/runs/${currentId}/share" target="_blank" rel="noopener">Open as shareable page ↗</a></p><div class="report">${marked.parse(md)}</div>`;
+}
+
 async function openRun(id) {
   if (source) source.close();
   currentId = id;
@@ -179,14 +184,14 @@ async function openRun(id) {
       events.insertAdjacentHTML("beforeend", html);
       if (stick) events.scrollTop = events.scrollHeight;
     }
-    if (ev.type === "report") $("#report").innerHTML = `<div class="report">${marked.parse(ev.markdown)}</div>`;
+    if (ev.type === "report") showReport(ev.markdown);
     if (ev.type === "end") { status = ev.status; loadHistory(); $("#cancel")?.remove(); }
     update();
   };
   const cancelBtn = $("#cancel");
   if (cancelBtn) cancelBtn.onclick = async () => { cancelBtn.disabled = true; await fetch(`/api/runs/${id}/cancel`, { method: "POST" }); };
   r.events.forEach(add);
-  if (r.report && !r.events.some((e) => e.type === "report")) $("#report").innerHTML = `<div class="report">${marked.parse(r.report)}</div>`;
+  if (r.report && !r.events.some((e) => e.type === "report")) showReport(r.report);
   update();
   loadHistory();
   if (status === "running") {
