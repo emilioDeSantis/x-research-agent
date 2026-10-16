@@ -36,6 +36,13 @@ async def ask(body: Ask):
     return {"id": run.id}
 
 
+@app.post("/api/runs/{run_id}/cancel")
+def cancel(run_id: str):
+    if not agent.cancel(run_id):
+        raise HTTPException(404, "no running run with that id")
+    return {"ok": True}
+
+
 @app.get("/api/runs")
 def runs():
     live = {r.id: r.status for r in agent.RUNS.values()}

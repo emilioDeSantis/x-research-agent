@@ -161,6 +161,7 @@ async function openRun(id) {
   $("#main").innerHTML = `
     <div class="q">${esc(r.question)}</div>
     <div class="meta" id="meta"></div>
+    ${r.status === "running" ? `<button class="new" id="cancel" style="width:auto">Stop this run</button>` : ""}
     <details class="log" ${r.status === "running" ? "open" : ""}><summary id="logsum"></summary><div class="events" id="events"></div></details>
     <div id="report"></div>`;
   let cost = r.cost, status = r.status, n = 0;
@@ -179,9 +180,11 @@ async function openRun(id) {
       if (stick) events.scrollTop = events.scrollHeight;
     }
     if (ev.type === "report") $("#report").innerHTML = `<div class="report">${marked.parse(ev.markdown)}</div>`;
-    if (ev.type === "end") { status = ev.status; loadHistory(); }
+    if (ev.type === "end") { status = ev.status; loadHistory(); $("#cancel")?.remove(); }
     update();
   };
+  const cancelBtn = $("#cancel");
+  if (cancelBtn) cancelBtn.onclick = async () => { cancelBtn.disabled = true; await fetch(`/api/runs/${id}/cancel`, { method: "POST" }); };
   r.events.forEach(add);
   if (r.report && !r.events.some((e) => e.type === "report")) $("#report").innerHTML = `<div class="report">${marked.parse(r.report)}</div>`;
   update();

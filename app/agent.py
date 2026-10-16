@@ -371,6 +371,8 @@ async def execute(run: Run) -> None:
         run.report = report
         run.status = "done"
         await run.emit("report", markdown=report, cost=run.cost.summary())
+    except asyncio.CancelledError:
+        run.status = "cancelled"
     except Exception as e:
         run.status = "error"
         await run.emit("error", message=f"{type(e).__name__}: {e}")
@@ -382,5 +384,13 @@ async def execute(run: Run) -> None:
 def start(question: str, depth: str, budget: float | None = None) -> Run:
     run = Run(question, depth, budget)
     RUNS[run.id] = run
-    asyncio.create_task(execute(run))
+    run.task = asyncio.create_task(execute(run))
     return run
+
+
+def cancel(run_id: str) -> bool:
+    run = RUNS.get(run_id)
+    if not run or run.status != "running":
+        return False
+    run.task.cancel()
+    return True
