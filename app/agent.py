@@ -46,7 +46,7 @@ def _source_tools() -> list[dict]:
                 "accounts, and reads threads for you, then returns the relevant posts with handles, quotes, dates and "
                 "x.com URLs. Best for discovery: 'what are people saying about X', finding who matters on a topic, "
                 "catching things you don't know the keywords for. Phrase the query as a precise natural-language "
-                "request. Covers all of X's history. The most expensive tool (~$0.50–1.50 per call; busy topics cost more), so make each query count and don't repeat near-identical ones."
+                "request. Covers all of X's history. The most expensive tool (~$0.50–2.00 per call; busy topics cost more), so make each query count and don't repeat near-identical ones."
             ),
             "input_schema": {
                 "type": "object",
@@ -140,7 +140,7 @@ DELEGATE_TOOL = {
 
 
 # Rough worst-case cost of one call, used to refuse calls that would blow the budget.
-EST_COST = {"x_search_grok": 1.2, "x_search": 0.5, "x_thread": 0.6, "x_user_posts": 0.3}
+EST_COST = {"x_search_grok": 2.0, "x_search": 0.5, "x_thread": 0.6, "x_user_posts": 0.3}
 
 
 def _today() -> str:
