@@ -54,19 +54,6 @@ Open http://localhost:8787. The three dots at the top left turn green for each k
 
 Add `--reload` (`./run.sh --reload`) if you're editing the code and want the server to restart on changes. After changing `.env`, restart the server.
 
-## Automatic sharing to the shared GitHub repo
-
-If `SHARED_REPO_DIR` in `.env` points at a local clone of the shared repo, every finished **deep** or **max** run is saved into that repo's `deep-research/` folder. A short note goes into `chat.md` and the change is pushed. The research log shows "Saved to the shared GitHub repo" when it worked.
-
-```
-SHARED_REPO_DIR=~/Documents/emilio-x-zeke-communicating-with-claude
-SHARED_REPO_ME=Emilio        # your name, used in the chat note
-SHARED_REPO_THEM=Zeke        # who the note is addressed to
-# SHARED_REPO_DEPTHS=deep,max   # add quick to share those too
-```
-
-Leave `SHARED_REPO_DIR` empty to turn it off.
-
 ## Cost
 
 Roughly what a run costs:
